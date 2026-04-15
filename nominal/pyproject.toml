@@ -1,0 +1,15 @@
+[project]
+name = "nominal-moonraker"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "nominal-instro>=0.5.2",
+    "websocket-client>=1.6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+nominal-instro = { path = "../../instrumentation", editable = true }

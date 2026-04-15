@@ -1,0 +1,23 @@
+# Nominal Moonraker recipes
+
+# Run the smoke test against a running Moonraker instance
+test:
+    uv run python examples/smoke_test.py
+
+# Run the background worker example (Ctrl+C to stop)
+example:
+    uv run python examples/moonraker_background_worker.py
+
+# Run the background worker with Nominal Core publishing (Ctrl+C to stop)
+publish dataset_rid:
+    uv run python examples/moonraker_background_worker.py {{dataset_rid}}
+
+# Restart printer firmware (fixes "Timer too close" / MCU shutdown errors)
+restart:
+    curl -s -X POST http://localhost:7125/printer/firmware_restart | python3 -m json.tool
+    ./scripts/wait_for_ready.sh 30
+
+# Full container restart (when firmware_restart isn't enough)
+reboot:
+    docker compose -f ../docker-compose.yml restart
+    ./scripts/wait_for_ready.sh 60
