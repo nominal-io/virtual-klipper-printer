@@ -12,6 +12,28 @@ services:
     tmpfs:
       - /tmp:noexec
       - /home/printer/printer_data/comms:noexec
+
+  mediamtx:
+    container_name: mediamtx
+    image: bluenviron/mediamtx:1-ffmpeg
+    ports:
+      - "8554:8554"
+      - "8000:8000/udp"
+      - "8001:8001/udp"
+      - "8888:8888"
+      - "8889:8889"
+      - "8890:8890/udp"
+      - "8189:8189/udp"
+    environment:
+      - MTX_WEBRTCADDITIONALHOSTS=127.0.0.1
+      - MTX_PATHS_WEBCAM_SOURCE=publisher
+      - MTX_PATHS_WEBCAM_RUNONINIT=ffmpeg -r 1 -i http://printer:8080/?action=stream -r 15 -c:v libx264 -preset ultrafast -tune zerolatency -pix_fmt yuv420p -g 30 -f rtsp rtsp://localhost:8554/webcam
+      - MTX_PATHS_WEBCAM_RUNONINIRESTART=true
+    depends_on:
+      - printer
+    networks:
+      - dev_net
+
 networks:
   dev_net:
     driver: bridge

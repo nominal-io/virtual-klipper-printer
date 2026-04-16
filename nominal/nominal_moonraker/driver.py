@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
+from typing import Callable
 
 import websocket
 
@@ -17,12 +18,17 @@ class MoonrakerError(Exception):
         super().__init__(f"Moonraker error {code}: {message}")
 
 
+StatusCallback = Callable[[dict, float], None]
+GcodeCallback = Callable[[str], None]
+
+
 class MoonrakerDriver:
     """Synchronous websocket driver for the Moonraker JSON-RPC API.
 
     Provides a thread-safe interface for sending JSON-RPC 2.0 requests to a
     Moonraker instance and waiting for responses.  A background thread handles
-    incoming messages and dispatches them to the appropriate callers.
+    incoming messages, dispatching request responses by id and routing
+    ``notify_status_update`` notifications to a registered callback.
     """
 
     def __init__(self, host: str, port: int = 7125) -> None:
@@ -35,6 +41,8 @@ class MoonrakerDriver:
         self._responses: dict[int, dict] = {}
         self._recv_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
+        self._status_callback: StatusCallback | None = None
+        self._gcode_callback: GcodeCallback | None = None
 
     @property
     def url(self) -> str:
@@ -57,6 +65,23 @@ class MoonrakerDriver:
             self._recv_thread.join()
         self._ws = None
 
+    def on_status_update(self, callback: StatusCallback | None) -> None:
+        """Register a callback for ``notify_status_update`` notifications.
+
+        The callback receives ``(status_dict, eventtime)`` where *status_dict*
+        contains only the fields that changed since the last update.  Set to
+        ``None`` to clear the callback.
+        """
+        self._status_callback = callback
+
+    def on_gcode_response(self, callback: GcodeCallback | None) -> None:
+        """Register a callback for ``notify_gcode_response`` notifications.
+
+        The callback receives the gcode response string.  Set to ``None``
+        to clear the callback.
+        """
+        self._gcode_callback = callback
+
     def _recv_loop(self) -> None:
         while not self._stop_event.is_set():
             try:
@@ -71,10 +96,24 @@ class MoonrakerDriver:
             except json.JSONDecodeError:
                 continue
 
+            # Request/response correlation
             msg_id = data.get("id")
             if msg_id is not None and msg_id in self._pending:
                 self._responses[msg_id] = data
                 self._pending[msg_id].set()
+                continue
+
+            # Subscription notifications
+            method = data.get("method")
+            if method == "notify_status_update" and self._status_callback:
+                params = data.get("params", [])
+                if len(params) >= 2:
+                    self._status_callback(params[0], params[1])
+
+            if method == "notify_gcode_response" and self._gcode_callback:
+                params = data.get("params", [])
+                if len(params) >= 1:
+                    self._gcode_callback(params[0])
 
     def _next_id(self) -> int:
         self._request_id += 1
@@ -125,11 +164,23 @@ class MoonrakerDriver:
 
         return response["result"]
 
-    # -- convenience methods --------------------------------------------------
+    # -- high-level methods ---------------------------------------------------
 
     def query_objects(self, objects: dict[str, list[str] | None]) -> dict:
         """Query one or more printer objects for their current state."""
         return self.call_method("printer.objects.query", {"objects": objects})
+
+    def subscribe_objects(self, objects: dict[str, list[str] | None]) -> dict:
+        """Subscribe to status updates for one or more printer objects.
+
+        The initial response contains the full state (same as query).
+        Subsequent changes are delivered asynchronously via the callback
+        registered with :meth:`on_status_update`.
+
+        A new subscription replaces any previous one.  Pass an empty dict
+        to cancel all subscriptions.
+        """
+        return self.call_method("printer.objects.subscribe", {"objects": objects})
 
     def list_objects(self) -> list[str]:
         """Return the list of available printer objects."""

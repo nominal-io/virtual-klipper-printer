@@ -5,6 +5,7 @@ requires-python = ">=3.12"
 dependencies = [
     "nominal-instro>=0.5.2",
     "websocket-client>=1.6.0",
+    "nominal[video]>=1.99.0",
 ]
 
 [build-system]

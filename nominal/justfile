@@ -12,6 +12,14 @@ example:
 publish dataset_rid:
     uv run python examples/moonraker_background_worker.py {{dataset_rid}}
 
+# Stream printer webcam video to Nominal (Ctrl+C to stop)
+video:
+    uv run python examples/video_stream.py
+
+# Stream telemetry + video to Nominal via asset (Ctrl+C to stop)
+stream:
+    uv run python examples/stream_all.py
+
 # Restart printer firmware (fixes "Timer too close" / MCU shutdown errors)
 restart:
     curl -s -X POST http://localhost:7125/printer/firmware_restart | python3 -m json.tool

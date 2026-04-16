@@ -25,6 +25,7 @@ if DATASET_RID:
     publisher = NominalCorePublisher(dataset_rid=DATASET_RID, api_key=NOMINAL_API_KEY)
     printer.add_publisher(publisher)
     print(f"Publishing to Nominal Core dataset: {DATASET_RID}")
+
 printer.open()
 
 try:
@@ -32,35 +33,32 @@ try:
     objects = printer.list_printer_objects()
     print(f"Available objects ({len(objects)}): {', '.join(objects[:10])}...")
 
-    # Query each subsystem
-    toolhead = printer.describe_toolhead()
-    print(f"Toolhead channels: {list(toolhead.channel_data.keys())}")
+    # Query subsystems via generic describe()
+    for obj in ["toolhead", "motion_report", "gcode_move", "extruder", "heater_bed",
+                 "print_stats", "fan", "virtual_sdcard", "idle_timeout"]:
+        try:
+            m = printer.describe(obj)
+            print(f"{obj}: {list(m.channel_data.keys())}")
+        except Exception as e:
+            print(f"{obj}: {e}")
 
-    extruder = printer.describe_extruder()
-    print(f"Extruder channels: {list(extruder.channel_data.keys())}")
-
-    bed = printer.describe_heater_bed()
-    print(f"Heater bed channels: {list(bed.channel_data.keys())}")
-
-    stats = printer.describe_print_stats()
-    print(f"Print stats channels: {list(stats.channel_data.keys())}")
-
-    fan = printer.describe_fan()
-    print(f"Fan channels: {list(fan.channel_data.keys())}")
-
-    info = printer.describe_printer_info()
-    print(f"Printer info channels: {list(info.channel_data.keys())}")
-
-    # Start background worker briefly
+    # Start subscription-based background worker
     printer.background_interval = 1.0
     printer.start()
     time.sleep(3)
 
+    # Scalar fields (unchanged naming)
     bed_temp = printer.get_channel("myPrinter.heater_bed.temperature", 1, True)
     ext_temp = printer.get_channel("myPrinter.extruder.temperature", 1, True)
-    print(f"\nBackground worker results:")
+
+    # Indexed fields now use named suffixes from PrinterObject.index_names
+    # e.g. position[0] -> position.x, live_velocity is a scalar field
+    velocity = printer.get_channel("myPrinter.motion_report.live_velocity", 1, True)
+
+    print(f"\nBackground subscription results:")
     print(f"  Bed temp: {bed_temp.latest}")
     print(f"  Extruder temp: {ext_temp.latest}")
+    print(f"  Live velocity: {velocity.latest}")
 
     print("\nSmoke test passed.")
 
